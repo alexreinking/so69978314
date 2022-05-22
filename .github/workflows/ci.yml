@@ -1,0 +1,48 @@
+name: Test
+on: [ 'push' ]
+concurrency:
+  group: ${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  test:
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ windows-latest, macos-latest, ubuntu-latest ]
+    env:
+      PREFIX: ${{ github.workspace }}/_local
+    steps:
+      # Check out project
+      - uses: actions/checkout@v2
+      # Check out dependencies
+      - uses: actions/checkout@v2
+        with:
+          repository: google/googletest
+          ref: 8d51dc50eb7e7698427fed81b85edad0e032112e
+          path: googletest
+      - uses: actions/checkout@v2
+        with:
+          repository: leethomason/tinyxml2
+          ref: e45d9d16d430a3f5d3eee9fe40d5e194e1e5e63a
+          path: tinyxml2
+      # Install CMake
+      - uses: lukka/get-cmake@latest
+      # Manually install dependencies
+      - name: Install Google Test
+        run: |
+          cmake -S googletest -B build/deps/googletest -DCMAKE_BUILD_TYPE=RelWithDebInfo '-DCMAKE_INSTALL_PREFIX=${{ env.PREFIX }}' -DBUILD_SHARED_LIBS=YES
+          cmake --build build/deps/googletest --config RelWithDebInfo --target install
+      - name: Install tinyxml2
+        run: |
+          cmake -S tinyxml2 -B build/deps/tinyxml2 -DCMAKE_BUILD_TYPE=RelWithDebInfo '-DCMAKE_INSTALL_PREFIX=${{ env.PREFIX }}' -DBUILD_SHARED_LIBS=YES
+          cmake --build build/deps/tinyxml2 --config RelWithDebInfo --target install
+      # Build and test project
+      - name: CMake Configure
+        run: >
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo '-DCMAKE_PREFIX_PATH=${{ env.PREFIX }}'
+      - name: CMake Build
+        run: cmake --build build --config RelWithDebInfo
+      - name: CTest
+        run: ctest --test-dir build --config RelWithDebInfo
